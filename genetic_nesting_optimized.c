@@ -5,7 +5,15 @@
 #include <time.h>
 #include <float.h>
 #include <stdbool.h>
-#include <unistd.h>  // Para getpid()
+
+#ifdef _WIN32
+    #include <windows.h>
+    #include <process.h>
+    #define getpid _getpid
+#else
+    #include <unistd.h>
+    #include <sys/time.h>
+#endif
 
 #define MAX_PIECES 100
 #define MAX_POINTS 1000
@@ -1138,9 +1146,17 @@ int main(int argc, char* argv[]) {
     } else {
         // Caso contrário, usa método mais robusto para aleatoriedade verdadeira
         // Combina tempo em microsegundos + PID para garantir unicidade
-        struct timespec ts;
-        clock_gettime(CLOCK_MONOTONIC, &ts);
-        seed = (unsigned int)(ts.tv_sec ^ ts.tv_nsec ^ (getpid() << 16));
+        #ifdef _WIN32
+            // Windows: usa GetTickCount64 + PID + time
+            LARGE_INTEGER counter;
+            QueryPerformanceCounter(&counter);
+            seed = (unsigned int)(counter.QuadPart ^ time(NULL) ^ (getpid() << 16));
+        #else
+            // Linux: usa clock_gettime
+            struct timespec ts;
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            seed = (unsigned int)(ts.tv_sec ^ ts.tv_nsec ^ (getpid() << 16));
+        #endif
         printf("MODO ALEATORIO: seed gerada = %u\n", seed);
         printf("(Para reproduzir este resultado, execute: %s %u)\n\n", argv[0], seed);
     }
