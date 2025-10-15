@@ -5,6 +5,7 @@
 #include <time.h>
 #include <float.h>
 #include <stdbool.h>
+#include <errno.h>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -894,23 +895,94 @@ void save_best_result() {
 // ==================== PARSING AND OUTPUT ====================
 
 char* read_file(const char* filename) {
-    FILE* file = fopen(filename, "r");
-    if (!file) return NULL;
+    // CORRIGIDO: Usar modo binario "rb" para evitar problemas com conversao CRLF no Windows
+    // Isso garante que ftell() retorna o tamanho exato do arquivo
+    FILE* file = fopen(filename, "rb");
+    if (!file) {
+        // CORRIGIDO: Fornecer diagnostico detalhado do erro
+        printf("ERRO ao abrir arquivo: %s\n", filename);
+        printf("Detalhes: ");
 
-    fseek(file, 0, SEEK_END);
-    long size = ftell(file);
-    fseek(file, 0, SEEK_SET);
+        #ifdef _WIN32
+            // Windows: verificar se o arquivo existe
+            DWORD attrs = GetFileAttributesA(filename);
+            if (attrs == INVALID_FILE_ATTRIBUTES) {
+                DWORD error = GetLastError();
+                if (error == ERROR_FILE_NOT_FOUND) {
+                    printf("Arquivo nao encontrado.\n");
+                } else if (error == ERROR_PATH_NOT_FOUND) {
+                    printf("Caminho nao encontrado.\n");
+                } else if (error == ERROR_ACCESS_DENIED) {
+                    printf("Acesso negado (permissao).\n");
+                } else {
+                    printf("Codigo de erro Windows: %lu\n", error);
+                }
+            }
+        #else
+            // Linux/Unix: usar errno para diagnostico
+            printf("%s\n", strerror(errno));
+        #endif
 
-    char* content = malloc(size + 1);
-    size_t bytes_read = fread(content, 1, size, file);
-    if (bytes_read != (size_t)size) {
-        free(content);
+        // Mostrar diretorio de trabalho atual para debug
+        char cwd[1024];
+        #ifdef _WIN32
+            GetCurrentDirectoryA(sizeof(cwd), cwd);
+        #else
+            if (getcwd(cwd, sizeof(cwd)) == NULL) {
+                strcpy(cwd, "(nao foi possivel determinar)");
+            }
+        #endif
+        printf("Diretorio de trabalho atual: %s\n", cwd);
+        printf("\nVERIFIQUE:\n");
+        printf("1. O arquivo '%s' existe no mesmo diretorio que o executavel?\n", filename);
+        printf("2. O nome do arquivo esta correto (maiusculas/minusculas)?\n");
+        printf("3. Voce esta executando o programa do diretorio correto?\n");
+        printf("\n");
+
+        return NULL;
+    }
+
+    // CORRIGIDO: Verificar se fseek foi bem-sucedido
+    if (fseek(file, 0, SEEK_END) != 0) {
+        printf("ERRO: Falha ao posicionar no final do arquivo %s\n", filename);
         fclose(file);
         return NULL;
     }
-    content[size] = '\0';
 
+    long size = ftell(file);
+    if (size < 0) {
+        printf("ERRO: Falha ao obter tamanho do arquivo %s\n", filename);
+        fclose(file);
+        return NULL;
+    }
+
+    if (fseek(file, 0, SEEK_SET) != 0) {
+        printf("ERRO: Falha ao retornar ao inicio do arquivo %s\n", filename);
+        fclose(file);
+        return NULL;
+    }
+
+    // CORRIGIDO: Verificar se malloc foi bem-sucedido
+    char* content = malloc(size + 1);
+    if (!content) {
+        printf("ERRO: Falha ao alocar memoria para ler %s (tamanho: %ld bytes)\n", filename, size);
+        fclose(file);
+        return NULL;
+    }
+
+    size_t bytes_read = fread(content, 1, size, file);
     fclose(file);
+
+    // CORRIGIDO: Em modo binario "rb", bytes_read deve ser exatamente igual a size
+    // Se nao for, algo deu errado na leitura
+    if (bytes_read != (size_t)size) {
+        printf("ERRO: Leitura incompleta do arquivo %s\n", filename);
+        printf("Esperado: %ld bytes, Lido: %zu bytes\n", size, bytes_read);
+        free(content);
+        return NULL;
+    }
+
+    content[size] = '\0';
     return content;
 }
 
@@ -1073,9 +1145,25 @@ bool parse_input_json(const char* filename) {
 }
 
 void write_output_json(const char* filename) {
-    FILE* file = fopen(filename, "w");
+    // CORRIGIDO: Usar modo "wb" para garantir escrita binaria consistente
+    FILE* file = fopen(filename, "wb");
     if (!file) {
-        printf("Erro: Nao foi possivel escrever o arquivo %s\n", filename);
+        printf("ERRO: Nao foi possivel criar/escrever o arquivo %s\n", filename);
+        printf("Detalhes: ");
+
+        #ifdef _WIN32
+            DWORD error = GetLastError();
+            if (error == ERROR_ACCESS_DENIED) {
+                printf("Acesso negado. Verifique permissoes de escrita.\n");
+            } else if (error == ERROR_PATH_NOT_FOUND) {
+                printf("Caminho nao encontrado.\n");
+            } else {
+                printf("Codigo de erro Windows: %lu\n", error);
+            }
+        #else
+            printf("%s\n", strerror(errno));
+        #endif
+
         return;
     }
 

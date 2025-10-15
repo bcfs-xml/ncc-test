@@ -141,7 +141,8 @@
       "Read(//mnt/c/Users/bruno/Desktop/ncc-atual/**)",
       "Bash(readelf:*)",
       "Bash(objdump:*)",
-      "Bash(x86_64-w64-mingw32-gcc:*)"
+      "Bash(x86_64-w64-mingw32-gcc:*)",
+      "Bash(command:*)"
     ],
     "deny": [],
     "ask": []
