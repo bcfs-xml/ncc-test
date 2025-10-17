@@ -30,11 +30,11 @@
 // Feature flag: Set to 0 to disable concave nesting optimization (Phase 3)
 #define ENABLE_CONCAVE_NESTING 1
 
-// Concave nesting parameters - IMPROVED PRECISION
-#define CONCAVITY_THRESHOLD 0.25      // Minimum 25% empty space in bbox to consider concavity
-#define GRID_RESOLUTION 40            // 40x40 grid sampling for candidate points (was 20, increased 4x coverage)
-#define SUBGRID_RESOLUTION 5          // 5x5 sub-grid refinement around promising positions
-#define MAX_SMALL_PIECE_RATIO 0.25    // Small piece = max 25% of large piece area (was 0.15, more permissive)
+// Concave nesting parameters - AGRESSIVO PARA EXPLORAÇÃO MÁXIMA
+#define CONCAVITY_THRESHOLD 0.20      // Reduzido para 20% (era 25%) - detecta mais concavidades
+#define GRID_RESOLUTION 50            // Aumentado para 50x50 (era 40x40) - 25% mais pontos candidatos
+#define SUBGRID_RESOLUTION 7          // Aumentado para 7x7 (era 5x5) - refinamento mais fino
+#define MAX_SMALL_PIECE_RATIO 0.35    // Aumentado para 35% (era 25%) - aceita peças maiores em concavidades
 
 // Debug mode: Set to 1 to enable detailed logging
 #define DEBUG_CONCAVE_NESTING 1
@@ -44,12 +44,12 @@
 // For speed (faster): GRID_RESOLUTION 30, MAX_SMALL_PIECE_RATIO 0.20
 // For aggressive fitting: CONCAVITY_THRESHOLD 0.15, MAX_SMALL_PIECE_RATIO 0.35
 
-// Parametros do Algoritmo Genetico - AJUSTADOS PARA EVITAR CONVERGÊNCIA PREMATURA
+// Parametros do Algoritmo Genetico - AJUSTADOS PARA EXPLORAÇÃO AGRESSIVA
 #define POPULATION_SIZE 100
 #define GENERATIONS 50
 #define TOURNAMENT_SIZE 3
-#define MUTATION_RATE 0.15
-#define ELITE_SIZE 10
+#define MUTATION_RATE 0.35      // Aumentado de 0.15 para 0.35 (mais agressivo)
+#define ELITE_SIZE 5            // Reduzido de 10 para 5 (menos elitismo, mais diversidade)
 
 
 // #define POPULATION_SIZE 100
@@ -912,9 +912,9 @@ Genome order_crossover(Genome* parent1, Genome* parent2) {
 void mutate_genome(Genome* genome) {
     unsigned int* seed = get_thread_seed();
 
-    // CORRIGIDO: Mutação mais agressiva para manter diversidade - THREAD-SAFE
-    // Swap mutation: sempre fazer pelo menos 1 swap, às vezes mais
-    int num_swaps = 2 + thread_safe_rand(seed) % 3;  // 2-4 swaps
+    // OTIMIZADO: Mutação MUITO mais agressiva para exploração profunda - THREAD-SAFE
+    // Swap mutation: AUMENTADO para 4-8 swaps (era 2-4)
+    int num_swaps = 4 + thread_safe_rand(seed) % 5;  // 4-8 swaps
     for (int m = 0; m < num_swaps; m++) {
         if ((double)thread_safe_rand(seed) / RAND_MAX < MUTATION_RATE) {
             int pos1 = thread_safe_rand(seed) % input_data.piece_count;
@@ -926,8 +926,8 @@ void mutate_genome(Genome* genome) {
         }
     }
 
-    // Rotation mutation: mudar rotação de várias peças - THREAD-SAFE
-    int num_rotations = 3 + thread_safe_rand(seed) % 4;  // 3-6 rotações
+    // Rotation mutation: AUMENTADO para 6-10 rotações (era 3-6)
+    int num_rotations = 6 + thread_safe_rand(seed) % 5;  // 6-10 rotações
     for (int m = 0; m < num_rotations; m++) {
         if ((double)thread_safe_rand(seed) / RAND_MAX < MUTATION_RATE) {
             int piece_id = thread_safe_rand(seed) % input_data.piece_count;
@@ -935,6 +935,19 @@ void mutate_genome(Genome* genome) {
             if (angle_count > 1) {
                 genome->rotation_choices[piece_id] = thread_safe_rand(seed) % angle_count;
             }
+        }
+    }
+
+    // NOVO: Block swap mutation - troca blocos inteiros de peças (20% de chance)
+    if ((double)thread_safe_rand(seed) / RAND_MAX < 0.2) {
+        int block_size = 2 + thread_safe_rand(seed) % 4;  // blocos de 2-5 peças
+        int pos1 = thread_safe_rand(seed) % (input_data.piece_count - block_size);
+        int pos2 = thread_safe_rand(seed) % (input_data.piece_count - block_size);
+
+        for (int i = 0; i < block_size; i++) {
+            int temp = genome->piece_sequence[pos1 + i];
+            genome->piece_sequence[pos1 + i] = genome->piece_sequence[pos2 + i];
+            genome->piece_sequence[pos2 + i] = temp;
         }
     }
 }
@@ -1889,6 +1902,11 @@ int main(int argc, char* argv[]) {
     printf("Iniciando evolucao...\n");
     printf("=========================================\n");
 
+    // Variáveis para detectar estagnação e fazer restart
+    double last_best_fitness = -DBL_MAX;
+    int stagnation_count = 0;
+    const int STAGNATION_LIMIT = 10;  // Se ficar 10 gerações sem melhoria, fazer restart
+
     for (int gen = 0; gen < GENERATIONS; gen++) {
         // Ordenar populacao por fitness (decrescente) - bubble sort
         for (int i = 0; i < POPULATION_SIZE - 1; i++) {
@@ -1906,6 +1924,28 @@ int main(int argc, char* argv[]) {
         if (population[0].fitness > current_best_fitness) {
             evaluate_genome_to_global(&population[0]);
             save_best_result();
+        }
+
+        // NOVO: Detecção de estagnação e restart parcial da população
+        if (fabs(population[0].fitness - last_best_fitness) < 0.01) {
+            stagnation_count++;
+        } else {
+            stagnation_count = 0;
+            last_best_fitness = population[0].fitness;
+        }
+
+        // Se estagnado por muito tempo, fazer restart de 50% da população (menos elite)
+        if (stagnation_count >= STAGNATION_LIMIT && gen < GENERATIONS - 5) {
+            printf("  [RESTART] Estagnacao detectada (gen %d), reiniciando 50%% da populacao...\n", gen);
+            int restart_start = ELITE_SIZE;
+            int restart_end = POPULATION_SIZE / 2;
+
+            for (int i = restart_start; i < restart_end; i++) {
+                free_genome(&population[i]);
+                population[i] = create_random_genome();
+                evaluate_genome(&population[i]);
+            }
+            stagnation_count = 0;
         }
 
         // Mostrar progresso a cada 5 gerações ou na última

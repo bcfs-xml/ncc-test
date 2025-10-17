@@ -215,29 +215,40 @@ def create_comprehensive_dashboard(data):
     else:
         exec_time_str = f"{exec_time:.2f}s"
 
-    # Create subplot layout:
-    # Row 1-2: Board visualizations (3 per row = 2 rows)
-    # Row 3: Efficiency bar chart | Piece count bar chart | Scatter plot
-    # Row 4: Gauge | Statistics table | Heatmap
+    # Calculate number of rows needed for boards (3 boards per row)
+    boards_rows = (n_boards + 2) // 3  # Ceiling division
+    total_rows = boards_rows + 2  # Add 2 rows for charts and statistics
+
+    # Calculate row heights - boards get equal height, last 2 rows get fixed proportions
+    board_row_height = 0.52 / boards_rows if boards_rows > 0 else 0
+    row_heights = [board_row_height] * boards_rows + [0.22, 0.26]
+
+    # Create subplot titles dynamically
+    board_titles = [f'Board {board["board_id"]} - {board["efficiency"]:.1f}%' for board in boards]
+    # Pad with empty strings if needed to make grid complete
+    board_titles.extend([''] * (boards_rows * 3 - len(board_titles)))
+    subplot_titles = board_titles + [
+        'Board Efficiency Comparison',
+        'Piece Count Distribution',
+        'Efficiency vs Piece Count',
+        'Total Efficiency Gauge',
+        'Statistical Summary',
+        'Board Performance Heatmap'
+    ]
+
+    # Create specs array - scatter for boards, specific types for other plots
+    specs = [[{"type": "scatter"}] * 3 for _ in range(boards_rows)]
+    specs.extend([
+        [{"type": "bar"}, {"type": "bar"}, {"type": "scatter"}],
+        [{"type": "indicator"}, {"type": "table"}, {"type": "heatmap"}]
+    ])
 
     fig = make_subplots(
-        rows=4, cols=3,
-        row_heights=[0.26, 0.26, 0.22, 0.26],
+        rows=total_rows, 
+        cols=3,
+        row_heights=row_heights,
         column_widths=[0.33, 0.33, 0.34],
-        subplot_titles=[
-            f'Board {boards[0]["board_id"]} - {boards[0]["efficiency"]:.1f}%',
-            f'Board {boards[1]["board_id"]} - {boards[1]["efficiency"]:.1f}%',
-            f'Board {boards[2]["board_id"]} - {boards[2]["efficiency"]:.1f}%',
-            f'Board {boards[3]["board_id"]} - {boards[3]["efficiency"]:.1f}%',
-            f'Board {boards[4]["board_id"]} - {boards[4]["efficiency"]:.1f}%',
-            f'Board {boards[5]["board_id"]} - {boards[5]["efficiency"]:.1f}%',
-            'Board Efficiency Comparison',
-            'Piece Count Distribution',
-            'Efficiency vs Piece Count',
-            'Total Efficiency Gauge',
-            'Statistical Summary',
-            'Board Performance Heatmap'
-        ],
+        subplot_titles=subplot_titles,
         specs=[
             [{"type": "scatter"}, {"type": "scatter"}, {"type": "scatter"}],
             [{"type": "scatter"}, {"type": "scatter"}, {"type": "scatter"}],
@@ -250,10 +261,12 @@ def create_comprehensive_dashboard(data):
 
     colors = px.colors.qualitative.Set3
 
-    # Add all 6 board visualizations (rows 1-2)
+    # Add all board visualizations dynamically
     for idx, board in enumerate(boards):
         row = (idx // 3) + 1
         col = (idx % 3) + 1
+        if row > boards_rows:  # Skip if we've exceeded the number of board rows
+            break
 
         # Add board boundary
         fig.add_shape(
@@ -480,6 +493,9 @@ def create_comprehensive_dashboard(data):
     )
 
     # Update main layout for responsive desktop viewing
+    # Calculate dynamic height based on number of board rows
+    total_height = max(1000, 300 * boards_rows + 700)  # Base height + additional height per row of boards
+
     fig.update_layout(
         title={
             'text': f"<b>Comprehensive Nesting Results Dashboard</b><br>" +
@@ -493,7 +509,7 @@ def create_comprehensive_dashboard(data):
         },
         showlegend=False,
         autosize=True,
-        height=1000,
+        height=total_height,
         plot_bgcolor='white',
         paper_bgcolor='whitesmoke',
         margin=dict(l=40, r=40, t=80, b=30)
