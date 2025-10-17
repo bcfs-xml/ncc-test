@@ -243,19 +243,17 @@ def create_comprehensive_dashboard(data):
         [{"type": "indicator"}, {"type": "table"}, {"type": "heatmap"}]
     ])
 
+    # Adjust vertical spacing depending on number of board rows
+    vertical_spacing = 0.10 if boards_rows <= 2 else max(0.03, 0.12 - 0.01 * (boards_rows - 2))
+
     fig = make_subplots(
-        rows=total_rows, 
+        rows=total_rows,
         cols=3,
         row_heights=row_heights,
         column_widths=[0.33, 0.33, 0.34],
         subplot_titles=subplot_titles,
-        specs=[
-            [{"type": "scatter"}, {"type": "scatter"}, {"type": "scatter"}],
-            [{"type": "scatter"}, {"type": "scatter"}, {"type": "scatter"}],
-            [{"type": "bar"}, {"type": "bar"}, {"type": "scatter"}],
-            [{"type": "indicator"}, {"type": "table"}, {"type": "heatmap"}]
-        ],
-        vertical_spacing=0.10,
+        specs=specs,
+        vertical_spacing=vertical_spacing,
         horizontal_spacing=0.08
     )
 
