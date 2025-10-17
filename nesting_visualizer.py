@@ -333,7 +333,11 @@ def create_comprehensive_dashboard(data):
             row=row, col=col
         )
 
-    # Row 3, Col 1: Board Efficiency Comparison Bar Chart
+    # Calculate row positions dynamically based on number of board rows
+    charts_row = boards_rows + 1  # Row for bar charts and scatter plot
+    stats_row = boards_rows + 2   # Row for gauge, table, and heatmap
+
+    # Charts Row, Col 1: Board Efficiency Comparison Bar Chart
     board_ids = [f"Board {board['board_id']}" for board in boards]
     colors_bar = ['green' if i == best_board_idx else 'red' if i == worst_board_idx else 'steelblue'
                   for i in range(n_boards)]
@@ -348,13 +352,13 @@ def create_comprehensive_dashboard(data):
             name='Efficiency',
             hovertemplate='%{x}<br>Efficiency: %{y:.2f}%<extra></extra>'
         ),
-        row=3, col=1
+        row=charts_row, col=1
     )
 
-    fig.update_xaxes(title_text='Board', row=3, col=1)
-    fig.update_yaxes(title_text='Efficiency (%)', range=[0, 100], row=3, col=1)
+    fig.update_xaxes(title_text='Board', row=charts_row, col=1)
+    fig.update_yaxes(title_text='Efficiency (%)', range=[0, 100], row=charts_row, col=1)
 
-    # Row 3, Col 2: Piece Count Bar Chart
+    # Charts Row, Col 2: Piece Count Bar Chart
     fig.add_trace(
         go.Bar(
             x=board_ids,
@@ -365,13 +369,13 @@ def create_comprehensive_dashboard(data):
             name='Piece Count',
             hovertemplate='%{x}<br>Pieces: %{y}<extra></extra>'
         ),
-        row=3, col=2
+        row=charts_row, col=2
     )
 
-    fig.update_xaxes(title_text='Board', row=3, col=2)
-    fig.update_yaxes(title_text='Number of Pieces', row=3, col=2)
+    fig.update_xaxes(title_text='Board', row=charts_row, col=2)
+    fig.update_yaxes(title_text='Number of Pieces', row=charts_row, col=2)
 
-    # Row 3, Col 3: Efficiency vs Piece Count Scatter Plot
+    # Charts Row, Col 3: Efficiency vs Piece Count Scatter Plot
     fig.add_trace(
         go.Scatter(
             x=piece_counts,
@@ -395,13 +399,13 @@ def create_comprehensive_dashboard(data):
             name='Boards',
             hovertemplate='%{text}<br>Pieces: %{x}<br>Efficiency: %{y:.2f}%<extra></extra>'
         ),
-        row=3, col=3
+        row=charts_row, col=3
     )
 
-    fig.update_xaxes(title_text='Number of Pieces', row=3, col=3)
-    fig.update_yaxes(title_text='Efficiency (%)', range=[0, 100], row=3, col=3)
+    fig.update_xaxes(title_text='Number of Pieces', row=charts_row, col=3)
+    fig.update_yaxes(title_text='Efficiency (%)', range=[0, 100], row=charts_row, col=3)
 
-    # Row 4, Col 1: Total Efficiency Gauge
+    # Stats Row, Col 1: Total Efficiency Gauge
     fig.add_trace(
         go.Indicator(
             mode="gauge+number+delta",
@@ -429,10 +433,10 @@ def create_comprehensive_dashboard(data):
                 }
             }
         ),
-        row=4, col=1
+        row=stats_row, col=1
     )
 
-    # Row 4, Col 2: Statistical Summary Table
+    # Stats Row, Col 2: Statistical Summary Table
     summary_data = [
         ['Board Dimensions', f"{board_x} x {board_y} mm"],
         ['Total Boards', f"{n_boards}"],
@@ -463,10 +467,10 @@ def create_comprehensive_dashboard(data):
                 font=dict(size=11)
             )
         ),
-        row=4, col=2
+        row=stats_row, col=2
     )
 
-    # Row 4, Col 3: Board Performance Heatmap
+    # Stats Row, Col 3: Board Performance Heatmap
     # Create a matrix for heatmap: rows = boards, cols = [efficiency, pieces]
     heatmap_data = np.array([[eff, pc] for eff, pc in zip(efficiencies, piece_counts)])
 
@@ -488,7 +492,7 @@ def create_comprehensive_dashboard(data):
             showscale=False,
             hovertemplate='%{y}<br>%{x}: %{text}<extra></extra>'
         ),
-        row=4, col=3
+        row=stats_row, col=3
     )
 
     # Update main layout for responsive desktop viewing

@@ -145,7 +145,8 @@
       "Bash(command:*)",
       "Read(//usr/lib/**)",
       "Bash(sudo apt-get install:*)",
-      "Bash(sort:*)"
+      "Bash(sort:*)",
+      "Bash(pip3 install:*)"
     ],
     "deny": [],
     "ask": []
