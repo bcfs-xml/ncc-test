@@ -142,7 +142,10 @@
       "Bash(readelf:*)",
       "Bash(objdump:*)",
       "Bash(x86_64-w64-mingw32-gcc:*)",
-      "Bash(command:*)"
+      "Bash(command:*)",
+      "Read(//usr/lib/**)",
+      "Bash(sudo apt-get install:*)",
+      "Bash(sort:*)"
     ],
     "deny": [],
     "ask": []

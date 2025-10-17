@@ -190,56 +190,80 @@ def create_efficiency_dashboard(data):
     
     return fig
 
-def main():
-    """Main function to create and display all visualizations."""
-    # Load data
-    data = load_nesting_data('nesting_results.json')
-    
-    print("Creating nesting visualizations...")
-    print(f"Total boards: {data['board_count']}")
-    print(f"Overall efficiency: {data['total_efficiency']:.2f}%")
-    print(f"Board dimensions: {data['board_x']} x {data['board_y']}")
-    
-    # Create dashboard
-    dashboard = create_efficiency_dashboard(data)
-    dashboard.show()
-    
-    # Create individual board visualizations
-    for board in data['boards']:
-        print(f"\nProcessing Board {board['board_id']}")
-        print(f"  - Efficiency: {board['efficiency']:.1f}%")
-        print(f"  - Pieces: {board['piece_count']}")
-        
-        fig = create_board_visualization(board, data['board_x'], data['board_y'])
-        fig.show()
-    
-    # Create a combined overview with all boards in subplots
-    n_boards = len(data['boards'])
-    cols = min(3, n_boards)  # Maximum 3 columns
-    rows = (n_boards + cols - 1) // cols  # Calculate rows needed
-    
-    combined_fig = make_subplots(
-        rows=rows, cols=cols,
-        subplot_titles=[f'Board {board["board_id"]} ({board["efficiency"]:.1f}%)' 
-                       for board in data['boards']],
-        specs=[[{"type": "scatter"}] * cols for _ in range(rows)]
+def create_comprehensive_dashboard(data):
+    """Create a comprehensive single-page dashboard with all boards and analysis."""
+    boards = data['boards']
+    n_boards = len(boards)
+    board_x = data['board_x']
+    board_y = data['board_y']
+
+    # Calculate statistics
+    efficiencies = [board['efficiency'] for board in boards]
+    piece_counts = [board['piece_count'] for board in boards]
+    mean_eff = np.mean(efficiencies)
+    median_eff = np.median(efficiencies)
+    std_eff = np.std(efficiencies)
+    best_board_idx = np.argmax(efficiencies)
+    worst_board_idx = np.argmin(efficiencies)
+
+    # Format execution time for display
+    exec_time = data['execution_time']
+    if exec_time >= 60:
+        minutes = int(exec_time // 60)
+        seconds = int(exec_time % 60)
+        exec_time_str = f"{minutes}m {seconds}s"
+    else:
+        exec_time_str = f"{exec_time:.2f}s"
+
+    # Create subplot layout:
+    # Row 1-2: Board visualizations (3 per row = 2 rows)
+    # Row 3: Efficiency bar chart | Piece count bar chart | Scatter plot
+    # Row 4: Gauge | Statistics table | Heatmap
+
+    fig = make_subplots(
+        rows=4, cols=3,
+        row_heights=[0.26, 0.26, 0.22, 0.26],
+        column_widths=[0.33, 0.33, 0.34],
+        subplot_titles=[
+            f'Board {boards[0]["board_id"]} - {boards[0]["efficiency"]:.1f}%',
+            f'Board {boards[1]["board_id"]} - {boards[1]["efficiency"]:.1f}%',
+            f'Board {boards[2]["board_id"]} - {boards[2]["efficiency"]:.1f}%',
+            f'Board {boards[3]["board_id"]} - {boards[3]["efficiency"]:.1f}%',
+            f'Board {boards[4]["board_id"]} - {boards[4]["efficiency"]:.1f}%',
+            f'Board {boards[5]["board_id"]} - {boards[5]["efficiency"]:.1f}%',
+            'Board Efficiency Comparison',
+            'Piece Count Distribution',
+            'Efficiency vs Piece Count',
+            'Total Efficiency Gauge',
+            'Statistical Summary',
+            'Board Performance Heatmap'
+        ],
+        specs=[
+            [{"type": "scatter"}, {"type": "scatter"}, {"type": "scatter"}],
+            [{"type": "scatter"}, {"type": "scatter"}, {"type": "scatter"}],
+            [{"type": "bar"}, {"type": "bar"}, {"type": "scatter"}],
+            [{"type": "indicator"}, {"type": "table"}, {"type": "heatmap"}]
+        ],
+        vertical_spacing=0.10,
+        horizontal_spacing=0.08
     )
-    
-    colors = px.colors.qualitative.Set1
-    
-    for idx, board in enumerate(data['boards']):
-        row = idx // cols + 1
-        col = idx % cols + 1
-        
+
+    colors = px.colors.qualitative.Set3
+
+    # Add all 6 board visualizations (rows 1-2)
+    for idx, board in enumerate(boards):
+        row = (idx // 3) + 1
+        col = (idx % 3) + 1
+
         # Add board boundary
-        combined_fig.add_shape(
+        fig.add_shape(
             type="rect",
-            x0=0, y0=0, x1=data['board_x'], y1=data['board_y'],
-            line=dict(color="gray", width=1),
-            fillcolor="rgba(240, 240, 240, 0.1)",
+            x0=0, y0=0, x1=board_x, y1=board_y,
+            line=dict(color="black", width=2),
+            fillcolor="rgba(240, 240, 240, 0.2)",
             row=row, col=col
         )
-        
+
         # Add pieces
         for i, piece in enumerate(board['pieces']):
             coordinates = piece['data']
@@ -248,54 +272,263 @@ def main():
                 y_coords = [coord[1] for coord in coordinates]
                 x_coords.append(x_coords[0])
                 y_coords.append(y_coords[0])
-                
+
                 color = colors[i % len(colors)]
-                
-                combined_fig.add_trace(
+
+                fig.add_trace(
                     go.Scatter(
                         x=x_coords,
                         y=y_coords,
-                        fill='tonext',
+                        fill='toself',
                         fillcolor=color,
                         line=dict(color=color, width=1),
                         mode='lines',
                         showlegend=False,
-                        name=f'Piece {piece["piece_id"]}'
+                        name=f'Piece {piece["piece_id"]}',
+                        hovertemplate=(
+                            f'<b>Board {board["board_id"]}</b><br>' +
+                            f'Piece {piece["piece_id"]}<br>' +
+                            f'Angle: {piece["angle"]}°<br>' +
+                            '<extra></extra>'
+                        )
                     ),
                     row=row, col=col
                 )
-    
-    # Update combined layout
-    combined_fig.update_layout(
-        title_text=f"All Boards Overview - Total Efficiency: {data['total_efficiency']:.1f}%",
-        height=300 * rows,
-        width=400 * cols,
-        showlegend=False
+
+        # Update axes for each board subplot with actual dimension values
+        fig.update_xaxes(
+            title_text='',
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='lightgray',
+            range=[0, board_x],
+            tickmode='array',
+            tickvals=[0, 500, 1000, 1500, 2000, board_x],
+            ticktext=['0', '500', '1000', '1500', '2000', f'{board_x:.0f}'],
+            row=row, col=col
+        )
+        fig.update_yaxes(
+            title_text='',
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='lightgray',
+            range=[0, board_y],
+            tickmode='array',
+            tickvals=[0, 250, 500, 750, 1000, board_y],
+            ticktext=['0', '250', '500', '750', '1000', f'{board_y:.0f}'],
+            scaleanchor=f"x{((row-1)*3 + col)}",
+            scaleratio=1,
+            row=row, col=col
+        )
+
+    # Row 3, Col 1: Board Efficiency Comparison Bar Chart
+    board_ids = [f"Board {board['board_id']}" for board in boards]
+    colors_bar = ['green' if i == best_board_idx else 'red' if i == worst_board_idx else 'steelblue'
+                  for i in range(n_boards)]
+
+    fig.add_trace(
+        go.Bar(
+            x=board_ids,
+            y=efficiencies,
+            text=[f"{eff:.1f}%" for eff in efficiencies],
+            textposition='outside',
+            marker=dict(color=colors_bar, line=dict(color='black', width=1)),
+            name='Efficiency',
+            hovertemplate='%{x}<br>Efficiency: %{y:.2f}%<extra></extra>'
+        ),
+        row=3, col=1
     )
-    
-    # Make all subplots have equal aspect ratio
-    for i in range(1, rows + 1):
-        for j in range(1, cols + 1):
-            combined_fig.update_xaxes(
-                showgrid=True,
-                gridwidth=1,
-                gridcolor='lightgray',
-                range=[-50, data['board_x'] + 50],
-                row=i, col=j
+
+    fig.update_xaxes(title_text='Board', row=3, col=1)
+    fig.update_yaxes(title_text='Efficiency (%)', range=[0, 100], row=3, col=1)
+
+    # Row 3, Col 2: Piece Count Bar Chart
+    fig.add_trace(
+        go.Bar(
+            x=board_ids,
+            y=piece_counts,
+            text=piece_counts,
+            textposition='outside',
+            marker=dict(color='coral', line=dict(color='black', width=1)),
+            name='Piece Count',
+            hovertemplate='%{x}<br>Pieces: %{y}<extra></extra>'
+        ),
+        row=3, col=2
+    )
+
+    fig.update_xaxes(title_text='Board', row=3, col=2)
+    fig.update_yaxes(title_text='Number of Pieces', row=3, col=2)
+
+    # Row 3, Col 3: Efficiency vs Piece Count Scatter Plot
+    fig.add_trace(
+        go.Scatter(
+            x=piece_counts,
+            y=efficiencies,
+            mode='markers+text',
+            text=board_ids,
+            textposition='top center',
+            marker=dict(
+                size=15,
+                color=efficiencies,
+                colorscale='RdYlGn',
+                showscale=True,
+                colorbar=dict(
+                    title="Efficiency<br>(%)",
+                    x=1.15,
+                    len=0.2,
+                    y=0.375
+                ),
+                line=dict(color='black', width=1)
+            ),
+            name='Boards',
+            hovertemplate='%{text}<br>Pieces: %{x}<br>Efficiency: %{y:.2f}%<extra></extra>'
+        ),
+        row=3, col=3
+    )
+
+    fig.update_xaxes(title_text='Number of Pieces', row=3, col=3)
+    fig.update_yaxes(title_text='Efficiency (%)', range=[0, 100], row=3, col=3)
+
+    # Row 4, Col 1: Total Efficiency Gauge
+    fig.add_trace(
+        go.Indicator(
+            mode="gauge+number+delta",
+            value=data['total_efficiency'],
+            domain={'x': [0, 1], 'y': [0, 1]},
+            title={'text': "Overall<br>Efficiency (%)", 'font': {'size': 14}},
+            delta={'reference': 60, 'valueformat': '.2f'},
+            number={'suffix': '%', 'font': {'size': 24}},
+            gauge={
+                'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "darkgray"},
+                'bar': {'color': "darkgreen"},
+                'bgcolor': "white",
+                'borderwidth': 2,
+                'bordercolor': "gray",
+                'steps': [
+                    {'range': [0, 40], 'color': 'lightcoral'},
+                    {'range': [40, 60], 'color': 'lightyellow'},
+                    {'range': [60, 80], 'color': 'lightblue'},
+                    {'range': [80, 100], 'color': 'lightgreen'}
+                ],
+                'threshold': {
+                    'line': {'color': "red", 'width': 4},
+                    'thickness': 0.75,
+                    'value': 70
+                }
+            }
+        ),
+        row=4, col=1
+    )
+
+    # Row 4, Col 2: Statistical Summary Table
+    summary_data = [
+        ['Board Dimensions', f"{board_x} x {board_y} mm"],
+        ['Total Boards', f"{n_boards}"],
+        ['Total Pieces', f"{sum(piece_counts)}"],
+        ['Avg Pieces/Board', f"{sum(piece_counts)/n_boards:.1f}"],
+        ['Mean Efficiency', f"{mean_eff:.2f}%"],
+        ['Median Efficiency', f"{median_eff:.2f}%"],
+        ['Std Dev Efficiency', f"{std_eff:.2f}%"],
+        ['Best Board', f"Board {boards[best_board_idx]['board_id']} ({efficiencies[best_board_idx]:.1f}%)"],
+        ['Worst Board', f"Board {boards[worst_board_idx]['board_id']} ({efficiencies[worst_board_idx]:.1f}%)"],
+        ['Total Efficiency', f"{data['total_efficiency']:.2f}%"],
+        ['Execution Time', exec_time_str]
+    ]
+
+    fig.add_trace(
+        go.Table(
+            header=dict(
+                values=['<b>Metric</b>', '<b>Value</b>'],
+                fill_color='paleturquoise',
+                align='left',
+                font=dict(size=12, color='black')
+            ),
+            cells=dict(
+                values=[[row[0] for row in summary_data],
+                        [row[1] for row in summary_data]],
+                fill_color='lavender',
+                align='left',
+                font=dict(size=11)
             )
-            combined_fig.update_yaxes(
-                showgrid=True,
-                gridwidth=1,
-                gridcolor='lightgray',
-                range=[-50, data['board_y'] + 50],
-                scaleanchor=f"x{((i-1)*cols + j)}",
-                scaleratio=1,
-                row=i, col=j
-            )
-    
-    combined_fig.show()
-    
-    print("\nVisualization complete! All charts have been displayed.")
+        ),
+        row=4, col=2
+    )
+
+    # Row 4, Col 3: Board Performance Heatmap
+    # Create a matrix for heatmap: rows = boards, cols = [efficiency, pieces]
+    heatmap_data = np.array([[eff, pc] for eff, pc in zip(efficiencies, piece_counts)])
+
+    # Normalize to 0-100 scale for better visualization
+    heatmap_normalized = np.zeros_like(heatmap_data, dtype=float)
+    heatmap_normalized[:, 0] = heatmap_data[:, 0]  # Efficiency already 0-100
+    heatmap_normalized[:, 1] = (heatmap_data[:, 1] / max(piece_counts)) * 100  # Normalize pieces
+
+    fig.add_trace(
+        go.Heatmap(
+            z=heatmap_normalized,
+            x=['Efficiency (%)', 'Pieces (norm)'],
+            y=board_ids,
+            colorscale='RdYlGn',
+            text=[[f"{efficiencies[i]:.1f}%", f"{piece_counts[i]}"]
+                  for i in range(n_boards)],
+            texttemplate='%{text}',
+            textfont={"size": 10},
+            showscale=False,
+            hovertemplate='%{y}<br>%{x}: %{text}<extra></extra>'
+        ),
+        row=4, col=3
+    )
+
+    # Update main layout for responsive desktop viewing
+    fig.update_layout(
+        title={
+            'text': f"<b>Comprehensive Nesting Results Dashboard</b><br>" +
+                    f"<sup>Total Efficiency: {data['total_efficiency']:.2f}% | " +
+                    f"Boards: {n_boards} | Total Pieces: {sum(piece_counts)} | " +
+                    f"Board Size: {board_x} x {board_y} mm | " +
+                    f"Execution Time: {exec_time_str}</sup>",
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': {'size': 18}
+        },
+        showlegend=False,
+        autosize=True,
+        height=1000,
+        plot_bgcolor='white',
+        paper_bgcolor='whitesmoke',
+        margin=dict(l=40, r=40, t=80, b=30)
+    )
+
+    return fig
+
+
+def main():
+    """Main function to create and display all visualizations."""
+    # Load data
+    data = load_nesting_data('genetic_nesting_optimized_result.json')
+
+    print("Creating comprehensive nesting dashboard...")
+    print(f"Total boards: {data['board_count']}")
+    print(f"Overall efficiency: {data['total_efficiency']:.2f}%")
+    print(f"Board dimensions: {data['board_x']} x {data['board_y']}")
+
+    # Create comprehensive dashboard
+    dashboard = create_comprehensive_dashboard(data)
+
+    # Save dashboard to HTML file (better for WSL environments)
+    output_file = 'nesting_dashboard.html'
+    dashboard.write_html(output_file)
+
+    print("\n" + "="*60)
+    print("Dashboard created successfully!")
+    print("="*60)
+    print(f"\nHTML file saved to: {output_file}")
+    print(f"Full path: /mnt/c/Users/bruno/Desktop/ncc-plotly/{output_file}")
+    print("\nTo view the dashboard:")
+    print("  1. Navigate to: C:\\Users\\bruno\\Desktop\\ncc-plotly\\")
+    print(f"  2. Open '{output_file}' in your web browser")
+    print("  3. Or double-click the file to open it automatically")
+    print("\n" + "="*60)
 
 if __name__ == "__main__":
     main()
