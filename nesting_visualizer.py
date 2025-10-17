@@ -96,7 +96,7 @@ def create_efficiency_dashboard(data):
             'Total Efficiency Overview',
             'Execution Summary'
         ],
-        specs=[[{"type": "bar"}, {"type": "bar"}],
+        specs=[[{"type": "xy"}, {"type": "xy"}],
                [{"type": "indicator"}, {"type": "table"}]]
     )
     
@@ -236,11 +236,12 @@ def create_comprehensive_dashboard(data):
         'Board Performance Heatmap'
     ]
 
-    # Create specs array - scatter for boards, specific types for other plots
-    specs = [[{"type": "scatter"}] * 3 for _ in range(boards_rows)]
+    # Create specs array - xy type for all plots except indicator and table
+    # Note: xy is the standard Plotly subplot type compatible with scatter, bar, heatmap, etc.
+    specs = [[{"type": "xy"}] * 3 for _ in range(boards_rows)]
     specs.extend([
-        [{"type": "bar"}, {"type": "bar"}, {"type": "scatter"}],
-        [{"type": "indicator"}, {"type": "table"}, {"type": "heatmap"}]
+        [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}],
+        [{"type": "indicator"}, {"type": "table"}, {"type": "xy"}]
     ])
 
     # Adjust vertical spacing depending on number of board rows
